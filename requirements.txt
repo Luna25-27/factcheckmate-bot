@@ -1,0 +1,5 @@
+python-telegram-bot==20.8
+aiosqlite
+requests
+openai
+python-dotenv
