@@ -36,6 +36,10 @@ PORT = int(os.getenv("PORT", 10000))
 
 app_flask = Flask(__name__)
 
+@app.route("/")
+def index():
+    return "OK", 200
+
 @app_flask.route("/health", methods=["GET"])
 def health():
     return "ok", 200
