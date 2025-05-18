@@ -3,3 +3,4 @@ aiosqlite
 requests
 openai
 python-dotenv
+nest_asyncio
