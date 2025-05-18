@@ -13,6 +13,8 @@ from telegram.ext import (
     filters
 )
 from dotenv import load_dotenv
+from flask import Flask, request
+
 load_dotenv()
 
 # Logging
@@ -26,6 +28,26 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x]
 
 feedback_store = {}
+
+WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")  # e.g. https://your-service.onrender.com
+WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
+WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+PORT = int(os.getenv("PORT", 10000))
+
+app_flask = Flask(__name__)
+
+@app_flask.route("/health", methods=["GET"])
+def health():
+    return "ok", 200
+
+@app_flask.route(WEBHOOK_PATH, methods=["POST"])
+def webhook():
+    from telegram import Update
+    from telegram.ext import Application
+    application = app_flask.application
+    update = Update.de_json(request.get_json(force=True), application.bot)
+    application.update_queue.put_nowait(update)
+    return "", 204
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -172,20 +194,25 @@ async def vote_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def main():
     await init_db()
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("factcheck", factcheck))
-    app.add_handler(CommandHandler("quicknews", quicknews))
-    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, auto_fact_check))
-    app.add_handler(CallbackQueryHandler(vote_handler))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("factcheck", factcheck))
+    application.add_handler(CommandHandler("quicknews", quicknews))
+    application.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, auto_fact_check))
+    application.add_handler(CallbackQueryHandler(vote_handler))
 
-    print("✅ Bot is running...")
-    await app.run_polling()
+    app_flask.application = application
+    await application.initialize()
+    await application.start()
+    await application.bot.set_webhook(url=WEBHOOK_URL)
+    print(f"✅ Webhook set: {WEBHOOK_URL}")
 
 if __name__ == "__main__":
-    import asyncio
     import nest_asyncio
     nest_asyncio.apply()
-    asyncio.get_event_loop().run_until_complete(main())
+    import asyncio
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
+    app_flask.run(host="0.0.0.0", port=PORT)
