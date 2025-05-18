@@ -36,7 +36,7 @@ PORT = int(os.getenv("PORT", 10000))
 
 app_flask = Flask(__name__)
 
-@app.route("/")
+@app_flask.route("/")
 def index():
     return "OK", 200
 
